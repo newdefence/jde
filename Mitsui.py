@@ -15,16 +15,14 @@ from openpyxl.cell.read_only import EmptyCell
 logger = logging.getLogger()
 
 # TODO: excel 文件需要统一表头(第二行表头文字一定要一致，否则没法处理，或者需要根据一个文件一种处理方式)
-
+def value(cell):
+    return Decimal(str(cell.value))
 
 def read_invoice(workbook):
     sheet = workbook.worksheets[0]
-    # 发票号，PO号，物料号，数量，单价，合计，总数量，总合计，总件数，总毛重，总净重
-    # invoice, po, cpn = None, None, None
-    # qty, unit_value, total_value, total_qty, total_invoice_value, total_pkg = None, None, None, None, None, None
-    # total_gross_weight, total_net_weight = None, None
+    # 发票号，地址，原产国，PO号，物料号，数量，单价，合计，总数量，总合计，总件数，总毛重，总净重
     columns = None  # { '发票号': 1, '物料号': 3, ... }
-    # { 'invoice_no1': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
+    # { 'invoice_no': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
     invoices, all_sum = {}, None
     for ri, row in enumerate(sheet.iter_rows()):
         if not ri:  # 首行表头忽略
@@ -36,26 +34,31 @@ def read_invoice(workbook):
             cell_a_n = row[0]
             if isinstance(cell_a_n, EmptyCell):
                 all_sum = {
-                    '总数量': row[columns['总数量']].value,
-                    '总合计': row[columns['总合计']].value,
-                    '总毛重': row[columns['总毛重']].value,
-                    # NOTE: 为什么总件数没有呢？
+                    '总数量': value(row[columns['总数量']]),
+                    '总合计': value(row[columns['总合计']]),
+                    '总毛重': value(row[columns['总毛重']]),
+                    # NOTE: 为什么总件数，总净重没有呢？
                 }
             else:
                 # 只处理所需的字段，由于涉及到空单元格的问题，因此需要逐个字段处理，如果为空则按0处理
-                fields = ('发票号', 'PO号（明细）', '物料号', '数量', '单价', '合计', '总数量', '总合计', '总件数', '总毛重')
                 detail = {}
-                for key in fields:
+                for key in ('发票号', 'PO号（明细）', '物料号'):
                     cell = row[columns[key]]
-                    detail[key] = 0 if isinstance(cell, EmptyCell) else cell.value
+                    if isinstance(cell, EmptyCell):
+                        raise Exception('%s 为空' % key)
+                    else:
+                        detail[key] = cell.value
+                for key in ('数量', '单价', '合计', '总数量', '总合计', '总件数', '总毛重'):
+                    cell = row[columns[key]]
+                    detail[key] = Decimal(0) if isinstance(cell, EmptyCell) else value(cell)
                 invoice = invoices.setdefault(cell_a_n.value, {'details': [], 'sum': detail})
                 invoice['details'].append(detail)
                 # NOTE: 浮点数计算问题不可忽略
                 if detail['合计'] != detail['数量'] * detail['单价']:
-                    print(detail)
-                    raise Exception('TODO')
+                    raise Exception('单行 数量*单价与合计不符')
     # 每一个发票号明细总数量全部相等，并等于该发票号所有数量合计
-    for invoice in invoices.values():
+    all_invoices = invoices.values()
+    for invoice in all_invoices:
         sum1, details = invoice['sum'], invoice['details']
         total_qty, total_invoice_value, total_gross_weight, total_pkgs = sum1['总数量'], sum1['总合计'], sum1['总毛重'], sum1['总件数']
         if total_qty != sum(r['数量'] for r in details):
@@ -71,16 +74,100 @@ def read_invoice(workbook):
             raise Exception('总毛重错误')
         if not all(r['总件数'] == total_pkgs for r in details):
             raise Exception('总件数错误')
-
-
+    if all_sum['总数量'] != sum(v['sum']['总数量'] for v in all_invoices):
+        raise Exception('发票总数量合计错误')
+    if all_sum['总合计'] != sum(v['sum']['总合计'] for v in all_invoices):
+        raise Exception('发票总合计合计错误')
+    if all_sum['总毛重'] != sum(v['sum']['总毛重'] for v in all_invoices):
+        raise Exception('发票总毛重合计错误')
+    # NOTE: 没有总件数和总净重的核对需求
+    logger.info('发票文件核对完成')
 
 def read_packing(workbook):
     # 发票号，PO号，物料号，数量，单价，合计，总数量，总合计，总件数，总毛重，总净重
-    print('todo: packing')
+    sheet = workbook.worksheets[0]
+    columns = None  # { '发票号': 1, '物料号': 3, ... }
+    # { 'invoice_no': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
+    packings = {}
+    for ri, row in enumerate(sheet.iter_rows()):
+        if not ri:  # 首行表头忽略
+            continue
+        if ri == 1:  # 第二行根据中文提取字段
+            columns = dict((cell.value, cell.column - 1) for cell in row if not isinstance(cell, EmptyCell))
+        else:
+            cell_a_n = row[0] # columns['发票号'] == 0
+            # 只处理所需的字段，由于涉及到空单元格的问题，因此需要逐个字段处理，如果为空则按0处理
+            detail = {}
+            for key in ('发票号', 'PO号', '物料号'):
+                cell = row[columns[key]]
+                if isinstance(cell, EmptyCell):
+                    raise Exception('%s 为空' % key)
+                else:
+                    detail[key] = cell.value
+            for key in ('数量', '净重', '毛重', '总数量', '总净重', '总毛重', '总件数'):
+                cell = row[columns[key]]
+                detail[key] = Decimal(0) if isinstance(cell, EmptyCell) else value(cell)
+            pkg = packings.setdefault(cell_a_n.value, {'details': [], 'sum': detail})
+            # NOTE 单个料单净重，毛重可能为空，所以此处比较大小没有太多意义（数据出现过某料号有净重，无毛重）
+            pkg['details'].append(detail)
+    # 每一个发票号明细总数量，总净重，总毛重全部相等，总件数全部相同，并等于该发票号所有数量合计
+    all_pkgs = packings.values()
+    for invoice in all_pkgs:
+        sum1, details = invoice['sum'], invoice['details']
+        total_qty, total_net_weight, total_gross_weight, total_pkgs = sum1['总数量'], sum1['总净重'], sum1['总毛重'], sum1['总件数']
+        if total_qty != sum(r['数量'] for r in details):
+            raise Exception('总数量与数量总和不符')
+        if not all(r['总数量'] == total_qty for r in details):
+            raise Exception('总数量错误')
+        if total_net_weight != sum(r['净重'] for r in details):
+            raise Exception('总净重与净重总和不符')
+        if not all(r['总净重'] == total_net_weight for r in details):
+            raise Exception('总净重错误')
+        if total_gross_weight != sum(r['毛重'] for r in details):
+            raise Exception('总毛重与毛重总和不符')
+        if not all(r['总毛重'] == total_gross_weight for r in details):
+            raise Exception('总毛重错误')
+        if not all(r['总件数'] == total_pkgs for r in details):
+            raise Exception('总件数错误')
+    logger.info('箱单文件核对完成')
 
 
 def read_air(workbook):
-    print('todo: air')
+    # 逻辑如何处理，只有提运单号，处理那些字段呢？
+    sheet = workbook.worksheets[0]
+    columns = None  # { '发票号': 1, '物料号': 3, ... }
+    # { 'invoice_no': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
+    packings = {}
+    for ri, row in enumerate(sheet.iter_rows()):
+        if not ri:  # 首行表头忽略
+            continue
+        if ri == 1:  # 第二行根据中文提取字段
+            columns = dict((cell.value, cell.column - 1) for cell in row if not isinstance(cell, EmptyCell))
+        else:
+            cell_a_n = row[0] # columns['发票号'] == 0
+            # 只处理所需的字段，由于涉及到空单元格的问题，因此需要逐个字段处理，如果为空则按0处理
+            detail = {}
+            for key in ('主提运单号', '分提运单号'):
+                cell = row[columns[key]]
+                if isinstance(cell, EmptyCell):
+                    raise Exception('%s 为空' % key)
+                else:
+                    detail[key] = cell.value
+            for key in ('托盘数', '总毛重', '总件数'):
+                cell = row[columns[key]]
+                detail[key] = Decimal(0) if isinstance(cell, EmptyCell) else value(cell)
+            pkg = packings.setdefault(cell_a_n.value, {'details': [], 'sum': detail})
+            pkg['details'].append(detail)
+    # 每一个发票号明细总数量，总净重，总毛重全部相等，总件数全部相同，并等于该发票号所有数量合计
+    all_pkgs = packings.values()
+    for invoice in all_pkgs:
+        sum1, details = invoice['sum'], invoice['details']
+        total_gross_weight, total_pkgs = sum1['总毛重'], sum1['总件数']
+        if not all(r['总毛重'] == total_gross_weight for r in details):
+            raise Exception('总毛重错误')
+        if not all(r['总件数'] == total_pkgs for r in details):
+            raise Exception('总件数错误')
+    logger.info('空运文件核对完成？校验规则在哪里？')
 
 
 def check(proforma_invoice, packing_list, air_warbill):
@@ -92,9 +179,12 @@ def check(proforma_invoice, packing_list, air_warbill):
     air = load_workbook(air_warbill, read_only=True) if air_warbill else None
 
     # excel 文件其实没必要写三个，一个文件三个 sheet 即可
+    # TODO NOTE: 每个文件先内部数据校验，合格后文件穿插校验
     read_invoice(invoice)
     if packing:
         read_packing(packing)
     if air:
         read_air(air)
+    # TODO 3个文件交互验证，比对数据
+    logger.info('TODO: 交互验证，比对文件')
 

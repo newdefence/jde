@@ -52,6 +52,7 @@ def main():
             # Mitsui
             for file_name in target_files:
                 if file_name.startswith('~'):
+                    # 临时文件，忽略
                     continue
                 if file_name.endswith('_AirWarbill.xlsx'):
                     air_warbill = os.path.join(target_dir, file_name)
