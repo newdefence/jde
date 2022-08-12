@@ -8,11 +8,10 @@ __date__ = '2022/08/11 13:30'
 
 import os
 import logging
-from openpyxl import load_workbook, Workbook
 
-import Mitsui as first
+import Mitsui as test
 # region 日志模块配置
-LOG_FILE= '校对.log'
+LOG_FILE= '校对日志.log'
 LOG_FMT = logging.Formatter('%(asctime)s - %(funcName)s - %(lineno)s - %(levelname)s - %(message)s')
 # 日志配置 1
 # logging.basicConfig(filename = LOG_FILE, filemode = 'w', format = LOG_FMT, level = logging.INFO)
@@ -60,7 +59,7 @@ def main():
                     packing_list = os.path.join(target_dir, file_name)
                 elif file_name.endswith('_ProformaInvoice.xlsx'):
                     proforma_invoice = os.path.join(target_dir, file_name)
-            first.check(proforma_invoice, packing_list, air_warbill)
+            test.check(proforma_invoice, packing_list, air_warbill)
             break
 
 
