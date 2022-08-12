@@ -10,7 +10,7 @@ import os
 import logging
 from openpyxl import load_workbook, Workbook
 
-import first
+import Mitsui as first
 # region 日志模块配置
 LOG_FILE= '校对.log'
 LOG_FMT = logging.Formatter('%(asctime)s - %(funcName)s - %(lineno)s - %(levelname)s - %(message)s')
@@ -44,9 +44,12 @@ def main():
     for item in os.listdir(ROOT_PWD):
         root_dir = os.path.join(ROOT_PWD, item)
         if os.path.isdir(root_dir):
+            if not item.startswith('H221384'):
+                continue
             target_dir = os.path.join(root_dir, '识别结果')
             target_files = os.listdir(target_dir)
             proforma_invoice, packing_list, air_warbill = None, None, None
+            # Mitsui
             for file_name in target_files:
                 if file_name.startswith('~'):
                     continue
