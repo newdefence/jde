@@ -14,9 +14,11 @@ from openpyxl.cell.read_only import EmptyCell
 
 logger = logging.getLogger()
 
+
 # TODO: excel 文件需要统一表头(第二行表头文字一定要一致，否则没法处理，或者需要根据一个文件一种处理方式)
 def value(cell):
     return Decimal(str(cell.value))
+
 
 def read_invoice(workbook):
     sheet = workbook.worksheets[0]
@@ -83,6 +85,7 @@ def read_invoice(workbook):
     # NOTE: 没有总件数和总净重的核对需求
     logger.info('发票文件核对完成')
 
+
 def read_packing(workbook):
     # 发票号，PO号，物料号，数量，单价，合计，总数量，总合计，总件数，总毛重，总净重
     sheet = workbook.worksheets[0]
@@ -127,6 +130,8 @@ def read_packing(workbook):
             raise Exception('总毛重与毛重总和不符')
         if not all(r['总毛重'] == total_gross_weight for r in details):
             raise Exception('总毛重错误')
+        if total_gross_weight < total_net_weight:
+            raise Exception('总毛重小于总净重错误')
         if not all(r['总件数'] == total_pkgs for r in details):
             raise Exception('总件数错误')
     logger.info('箱单文件核对完成')
@@ -170,13 +175,25 @@ def read_air(workbook):
     logger.info('空运文件核对完成？校验规则在哪里？')
 
 
-def check(proforma_invoice, packing_list, air_warbill):
+def check_invoice2packing():
+    pass
+
+
+def check_invoice2air():
+    passs
+
+
+def check_packing2air():
+    pass
+
+
+def check(proforma_invoice, packing_list, air_waybill):
     if proforma_invoice is None:
         logger.warning('无发票文件')
         return
     invoice = load_workbook(proforma_invoice, read_only=True)
     packing = load_workbook(packing_list, read_only=True) if packing_list else None
-    air = load_workbook(air_warbill, read_only=True) if air_warbill else None
+    air = load_workbook(air_waybill, read_only=True) if air_waybill else None
 
     # excel 文件其实没必要写三个，一个文件三个 sheet 即可
     # TODO NOTE: 每个文件先内部数据校验，合格后文件穿插校验
