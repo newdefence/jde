@@ -9,7 +9,7 @@ __date__ = '2022/08/11 13:30'
 import os
 import logging
 
-import Mitsui as test
+import Taiflex as test
 # region 日志模块配置
 LOG_FILE= '校对日志.log'
 LOG_FMT = logging.Formatter('%(asctime)s - %(funcName)s - %(lineno)s - %(levelname)s - %(message)s')
@@ -43,7 +43,7 @@ def main():
     for item in os.listdir(ROOT_PWD):
         root_dir = os.path.join(ROOT_PWD, item)
         if os.path.isdir(root_dir):
-            if not item.startswith('H221384'):
+            if not item.startswith('Taiflex'):
                 continue
             target_dir = os.path.join(root_dir, '识别结果')
             target_files = os.listdir(target_dir)

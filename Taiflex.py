@@ -4,6 +4,7 @@ __date__ = '2022/08/16 17:43'
 
 import logging
 from decimal import Decimal
+from functools import reduce
 
 from openpyxl import load_workbook
 
@@ -32,13 +33,8 @@ def value(cell):
     return Decimal(str(cell.value or 0))
 
 
-def empty_cell(cell):
-    return cell.value is None or cell.value == ''
-
-
-def read_invoice(workbook):
+def read_invoice(sheet):
     """文件自查"""
-    sheet = workbook.worksheets[0]
     # 发票号，地址，原产国，PO号，物料号，数量，单价，合计，总数量，总合计，总件数，总毛重，总净重
     columns = None  # { '发票号': 1, '物料号': 3, ... }
     # { 'invoice_no': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
@@ -87,18 +83,18 @@ def read_invoice(workbook):
         sum1, details = invoice['sum'], invoice['details']
         total_qty, total_invoice_value, total_gross_weight, total_pkgs = sum1['总数量'], sum1['总合计'], sum1['总毛重'], sum1['总件数']
         if total_qty != sum(r['数量'] for r in details):
-            map(lambda d: d['errors'].add('总数量错误'), details)
+            tuple(d['errors'].add('总数量错误') for d in details)
         if not all(r['总数量'] == total_qty for r in details):
-            map(lambda d: d['errors'].add('总数量错误'), details)
+            tuple(d['errors'].add('总数量错误') for d in details)
         if total_invoice_value != sum(r['合计'] for r in details):
-            map(lambda d: d['errors'].add('总合计错误'), details)
+            tuple(d['errors'].add('总合计错误') for d in details)
         if not all(r['总合计'] == total_invoice_value for r in details):
-            map(lambda d: d['errors'].add('总合计错误'), details)
+            tuple(d['errors'].add('总合计错误') for d in details)
         # 毛重没法比对，只能和自己比对
         if not all(r['总毛重'] == total_gross_weight for r in details):
-            map(lambda d: d['errors'].add('总毛重错误'), details)
+            tuple(d['errors'].add('总毛重错误') for d in details)
         if not all(r['总件数'] == total_pkgs for r in details):
-            map(lambda d: d['errors'].add('总件数错误'), details)
+            tuple(d['errors'].add('总件数错误') for d in details)
     if all_sum['总数量'] != sum(v['sum']['总数量'] for v in all_invoices):
         all_sum['errors'].add('总数量汇总错误')
     if all_sum['总合计'] != sum(v['sum']['总合计'] for v in all_invoices):
@@ -107,23 +103,11 @@ def read_invoice(workbook):
         all_sum['errors'].add('总毛重汇总错误')
     # NOTE: 没有总件数和总净重的核对需求
     logger.info('发票文件核对完成')
-    return sheet.max_column, invoices, all_sum
+    return columns, invoices, all_sum
 
 
-def write_row_errors(sheet, details, target_col):
-    col1, col2 = target_col + 1, target_col + 2
-    ok = True
-    for d in details:
-        if d['errors']:
-            ok = False
-            sheet.cell(d['row'][0].row, col2, '，'.join(d['errors']))
-        else:
-            sheet.cell(d['row'][0].row, col1, '可入账')
-    return ok
-
-def read_packing(workbook):
+def read_packing(sheet):
     # 发票号，PO号，物料号，数量，单价，合计，总数量，总合计，总件数，总毛重，总净重
-    sheet = workbook.worksheets[0]
     columns = None  # { '发票号': 1, '物料号': 3, ... }
     # { 'invoice_no': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
     packings = {}
@@ -156,25 +140,24 @@ def read_packing(workbook):
         all_sum['总箱数'] = sum1['总箱数']
         all_sum['总件数'] = sum1['总件数']
         if total_qty != sum(r['数量'] for r in details):
-            map(lambda d: d['errors'].add('总数量错误'), details)
+            tuple(d['errors'].add('总数量错误') for d in details)
         if not all(r['总数量'] == total_qty for r in details):
-            map(lambda d: d['errors'].add('总数量错误'), details)
+            tuple(d['errors'].add('总数量错误') for d in details)
         if total_net_weight != sum(r['净重'] for r in details):
-            map(lambda d: d['errors'].add('总净重错误'), details)
+            tuple(d['errors'].add('总净重错误') for d in details)
         if not all(r['总净重'] == total_net_weight for r in details):
-            map(lambda d: d['errors'].add('总净重错误'), details)
+            tuple(d['errors'].add('总净重错误') for d in details)
         if total_gross_weight != sum(r['毛重'] for r in details):
-            map(lambda d: d['errors'].add('总毛重错误'), details)
+            tuple(d['errors'].add('总毛重错误') for d in details)
         if not all(r['总毛重'] == total_gross_weight for r in details):
-            map(lambda d: d['errors'].add('总毛重错误'), details)
+            tuple(d['errors'].add('总毛重错误') for d in details)
         if not all(r['总件数'] == total_pkgs for r in details):
-            map(lambda d: d['errors'].add('总件数错误'), details)
+            tuple(d['errors'].add('总件数错误') for d in details)
     logger.info('箱单文件核对完成')
-    return sheet.max_column, packings, all_sum
+    return columns, packings, all_sum
 
-def read_air(workbook):
+def read_air(sheet):
     # 逻辑如何处理，只有提运单号，处理那些字段呢？
-    sheet = workbook.worksheets[0]
     columns = None  # { '发票号': 1, '物料号': 3, ... }
     # { 'invoice_no': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
     details = []
@@ -182,7 +165,7 @@ def read_air(workbook):
         if columns:  # 首行表头忽略
             errors = set()
             detail = {'row': row, 'errors': errors}
-            for key in ('主提运单号', '分提运单号'):
+            for key in ('主运单号', '分运单号'):
                 cell = row[columns[key]]
                 if cell.value:
                     detail[key] = cell.value
@@ -197,21 +180,38 @@ def read_air(workbook):
         '总毛重': sum(d['总毛重'] for d in details),
         '总件数': sum(d['总件数'] for d in details),
     }
-    return sheet.max_column, details, all_sum
+    return columns, details, all_sum
 
-def check(proforma_invoice, packing_list, air_warbill):
+
+def write_row_errors(sheet, details, columns):
+    col1, col2 = columns['可否入账'] + 1, columns['异常信息'] + 1
+    has_error = False
+    for d in details:
+        errors, warnings = d['errors'], d.get('warnings')
+        if errors:
+            has_error = True
+        if warnings:
+            errors = errors + warnings
+        if errors:
+            sheet.cell(d['row'][0].row, col2, '，'.join(errors))
+        else:
+            sheet.cell(d['row'][0].row, col1, '可入账')
+    return has_error
+
+
+def check(proforma_invoice, packing_list, air_waybill):
     if proforma_invoice is None:
         logger.warning('无发票文件')
         return
     if packing_list is None:
         logger.warning('无箱单文件')
         return
-    invoice = load_workbook(proforma_invoice)
-    packing = load_workbook(packing_list)
-    air = load_workbook(air_warbill) if air_warbill else None
+    file1, file2, file3 = load_workbook(proforma_invoice), load_workbook(packing_list), (load_workbook(air_waybill) if air_waybill else None)
+    sheet1, sheet2, sheet3 = (f.worksheets[0] if f else None for f in (file1, file2, file3))
 
-    col1, invoices, all_sum1 = read_invoice(invoice)
-    col2, packings, all_sum2 = read_packing(packing)
+    columns1, invoices, all_sum1 = read_invoice(sheet1)
+    columns2, packings, all_sum2 = read_packing(sheet2)
+    columns3, airs, all_sum3 = read_air(sheet3) if air_waybill else (None, None, None)
     # 发票 VS 箱单
     keys1 = invoices.keys()
     keys2 = packings.keys()
@@ -222,8 +222,8 @@ def check(proforma_invoice, packing_list, air_warbill):
             if v1['sum']['总数量'] == v2['sum']['总数量']:
                 logger.info('发票跟箱单：%s %s总数量相同', v1['sum']['发票号'], '相同发票号单个料号' if len(v1['details']) > 1 else '单个发票号')
             else:
-                map(lambda d: d['errors'].add('发票跟提单总数量错误'), v1['details'])
-                map(lambda d: d['errors'].add('发票跟提单总数量错误'), v2['details'])
+                tuple(d['errors'].add('发票跟提单总数量错误') for d in v1['details'])
+                tuple(d['errors'].add('发票跟提单总数量错误') for d in v2['details'])
             # 校验箱单总毛重大于总净重
             if all(d['总毛重'] > d['总净重'] for d in v2['details']):
                 logger.info('发票跟箱单：总毛重大于总净重')
@@ -236,30 +236,43 @@ def check(proforma_invoice, packing_list, air_warbill):
         def write_diff_error(host, keys, msg):
             if keys:
                 for key in keys:
-                    map(lambda d: d['errors'].add(msg) for d in host[key]['details'])
+                    tuple(d['errors'].add(msg) for d in host[key]['details'])
         write_diff_error(invoices, keys1 - keys2, '发票号不在箱单文件中')
         write_diff_error(packings, keys2 - keys1, '发票号不在发票文件中')
 
     # 箱单 VS 提单，如果出现错误，只写提单
-    if air:
-        col3, bills, all_sum3 = read_air(air)
+    if air_waybill:
         def write_air_errors(msg):
-            map(lambda d: d['errors'].add(msg) for d in bills)
+            tuple(d['errors'].add(msg) for d in airs)
         if all_sum2['总托盘数'] != all_sum3['托盘数']:
             write_air_errors('托盘数与箱单不符')
         # 目前文件没有 总箱数 此列
-        # if all_sum2['总箱数'] != all_sum3['总箱数']:
-        #     pass
+        print('TODO：提单文件无`总箱数`列')
+        if all_sum2['总箱数'] != all_sum3.get('总箱数'):
+            print('TODO：提单文件无`总箱数`列？')
+            write_air_errors('总箱数与箱单不符:该文件无`总箱数`列')
         # 总毛重误差3%内正常
         diff_gross_weight = all_sum2['总毛重'] - all_sum3['总毛重']
         if diff_gross_weight:
             if diff_gross_weight >= all_sum2['总毛重'] * Decimal(0.03):
                 write_air_errors('总毛重与箱单不符：超过3%')
             else:
-                map(lambda d: d.setdefault('warnings', set()).add('总毛重与箱单误差3%以内') for d in bills)
+                tuple(d.setdefault('warnings', set()).add('总毛重与箱单误差3%以内') for d in airs)
         if all_sum2['总净重'] >= all_sum3['总毛重']:
             write_air_errors('箱单总净重需小于提单总毛重')
     logger.info('文件交互核对完成，开始序列化')
 
     # 开始写错误信息，如果有错误，则返回
-
+    has_error = 0
+    has_error += write_row_errors(sheet1, reduce(lambda x, y: x + y['details'], invoices.values(), []), columns1)
+    has_error += write_row_errors(sheet2, reduce(lambda x, y: x + y['details'], packings.values(), []), columns2)
+    if air_waybill:
+        has_error += write_row_errors(sheet3, airs, columns3)
+    if has_error:
+        logger.warning('文件校验完成，错误已标注')
+    else:
+        logger.info('文件校验完成，没有错误信息')
+    file1.save(proforma_invoice)
+    file2.save(packing_list)
+    if air_waybill:
+        file3.save(air_waybill)
