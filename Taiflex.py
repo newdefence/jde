@@ -107,7 +107,19 @@ def read_invoice(workbook):
         all_sum['errors'].add('总毛重汇总错误')
     # NOTE: 没有总件数和总净重的核对需求
     logger.info('发票文件核对完成')
+    return sheet.max_column, invoices, all_sum
 
+
+def write_row_errors(sheet, details, target_col):
+    col1, col2 = target_col + 1, target_col + 2
+    ok = True
+    for d in details:
+        if d['errors']:
+            ok = False
+            sheet.cell(d['row'][0].row, col2, '，'.join(d['errors']))
+        else:
+            sheet.cell(d['row'][0].row, col1, '可入账')
+    return ok
 
 def read_packing(workbook):
     # 发票号，PO号，物料号，数量，单价，合计，总数量，总合计，总件数，总毛重，总净重
@@ -133,10 +145,16 @@ def read_packing(workbook):
         else:  # 第二行根据中文提取字段
             columns = dict((cell.value, cell.column - 1) for cell in row if cell.value)
     # 每一个发票号明细总数量，总净重，总毛重全部相等，总件数全部相同，并等于该发票号所有数量合计
-    all_pkgs = packings.values()
+    all_pkgs, all_sum = packings.values(), {'总毛重': 0, '总净重': 0}
     for invoice in all_pkgs:
         sum1, details = invoice['sum'], invoice['details']
         total_qty, total_net_weight, total_gross_weight, total_pkgs = sum1['总数量'], sum1['总净重'], sum1['总毛重'], sum1['总件数']
+        all_sum['总毛重'] += total_gross_weight
+        all_sum['总净重'] += total_net_weight
+        # 总托盘数，总箱数，总件数 不累加
+        all_sum['总托盘数'] = sum1['总托盘数']
+        all_sum['总箱数'] = sum1['总箱数']
+        all_sum['总件数'] = sum1['总件数']
         if total_qty != sum(r['数量'] for r in details):
             map(lambda d: d['errors'].add('总数量错误'), details)
         if not all(r['总数量'] == total_qty for r in details):
@@ -152,14 +170,14 @@ def read_packing(workbook):
         if not all(r['总件数'] == total_pkgs for r in details):
             map(lambda d: d['errors'].add('总件数错误'), details)
     logger.info('箱单文件核对完成')
-
+    return sheet.max_column, packings, all_sum
 
 def read_air(workbook):
     # 逻辑如何处理，只有提运单号，处理那些字段呢？
     sheet = workbook.worksheets[0]
     columns = None  # { '发票号': 1, '物料号': 3, ... }
     # { 'invoice_no': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
-    packings = {}
+    details = []
     for row in sheet.iter_rows():
         if columns:  # 首行表头忽略
             errors = set()
@@ -171,35 +189,77 @@ def read_air(workbook):
                 else:
                     errors.add('%s为空' % key)
             detail.update((key, value(row[columns[key]])) for key in ('托盘数', '总毛重', '总件数'))
-            pkg = packings.setdefault(detail['主提运单号'], {'details': [], 'sum': detail})
-            pkg['details'].append(detail)
+            details.append(detail)
         else:  # 第二行根据中文提取字段
             columns = dict((cell.value, cell.column - 1) for cell in row if cell.value)
-    # TODO 确认：汇总逻辑，主运单/分运单如何与箱单和发票核对
-    all_pkgs = packings.values()
-    for invoice in all_pkgs:
-        sum1, details = invoice['sum'], invoice['details']
-        total_gross_weight, total_pkgs = sum1['总毛重'], sum1['总件数']
-        if not all(r['总毛重'] == total_gross_weight for r in details):
-            raise Exception('总毛重错误')
-        if not all(r['总件数'] == total_pkgs for r in details):
-            raise Exception('总件数错误')
-    logger.info('空运文件核对完成？校验规则在哪里？')
-
+    all_sum = {
+        '托盘数': sum(d['托盘数'] for d in details),
+        '总毛重': sum(d['总毛重'] for d in details),
+        '总件数': sum(d['总件数'] for d in details),
+    }
+    return sheet.max_column, details, all_sum
 
 def check(proforma_invoice, packing_list, air_warbill):
     if proforma_invoice is None:
         logger.warning('无发票文件')
         return
+    if packing_list is None:
+        logger.warning('无箱单文件')
+        return
     invoice = load_workbook(proforma_invoice)
-    packing = load_workbook(packing_list) if packing_list else None
+    packing = load_workbook(packing_list)
     air = load_workbook(air_warbill) if air_warbill else None
 
-    read_invoice(invoice)
-    if packing:
-        read_packing(packing)
+    col1, invoices, all_sum1 = read_invoice(invoice)
+    col2, packings, all_sum2 = read_packing(packing)
+    # 发票 VS 箱单
+    keys1 = invoices.keys()
+    keys2 = packings.keys()
+    if keys1 == keys2:
+        for key in keys1:
+            v1, v2 = invoices[key], packings[key]
+            # NOTE: 只核对总数量，总净重（发票文件无该信息），总毛重，总件数不核对
+            if v1['sum']['总数量'] == v2['sum']['总数量']:
+                logger.info('发票跟箱单：%s %s总数量相同', v1['sum']['发票号'], '相同发票号单个料号' if len(v1['details']) > 1 else '单个发票号')
+            else:
+                map(lambda d: d['errors'].add('发票跟提单总数量错误'), v1['details'])
+                map(lambda d: d['errors'].add('发票跟提单总数量错误'), v2['details'])
+            # 校验箱单总毛重大于总净重
+            if all(d['总毛重'] > d['总净重'] for d in v2['details']):
+                logger.info('发票跟箱单：总毛重大于总净重')
+            else:
+                for d in v2['details']:
+                    if d['总毛重'] <= d['总净重']:
+                        d['errors'].add('总毛重不大于总净重')
+    else:
+        logger.warning('发票跟箱单：发票数据核对不上')
+        def write_diff_error(host, keys, msg):
+            if keys:
+                for key in keys:
+                    map(lambda d: d['errors'].add(msg) for d in host[key]['details'])
+        write_diff_error(invoices, keys1 - keys2, '发票号不在箱单文件中')
+        write_diff_error(packings, keys2 - keys1, '发票号不在发票文件中')
+
+    # 箱单 VS 提单，如果出现错误，只写提单
     if air:
-        read_air(air)
-    # TODO 3个文件交互验证，比对数据
-    logger.info('TODO: 交互验证，比对文件')
+        col3, bills, all_sum3 = read_air(air)
+        def write_air_errors(msg):
+            map(lambda d: d['errors'].add(msg) for d in bills)
+        if all_sum2['总托盘数'] != all_sum3['托盘数']:
+            write_air_errors('托盘数与箱单不符')
+        # 目前文件没有 总箱数 此列
+        # if all_sum2['总箱数'] != all_sum3['总箱数']:
+        #     pass
+        # 总毛重误差3%内正常
+        diff_gross_weight = all_sum2['总毛重'] - all_sum3['总毛重']
+        if diff_gross_weight:
+            if diff_gross_weight >= all_sum2['总毛重'] * Decimal(0.03):
+                write_air_errors('总毛重与箱单不符：超过3%')
+            else:
+                map(lambda d: d.setdefault('warnings', set()).add('总毛重与箱单误差3%以内') for d in bills)
+        if all_sum2['总净重'] >= all_sum3['总毛重']:
+            write_air_errors('箱单总净重需小于提单总毛重')
+    logger.info('文件交互核对完成，开始序列化')
+
+    # 开始写错误信息，如果有错误，则返回
 
