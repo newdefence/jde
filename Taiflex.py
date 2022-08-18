@@ -4,7 +4,6 @@ __date__ = '2022/08/16 17:43'
 
 import logging
 from decimal import Decimal
-from functools import reduce
 
 from openpyxl import load_workbook
 
@@ -156,6 +155,7 @@ def read_packing(sheet):
     logger.info('箱单文件核对完成')
     return columns, packings, all_sum
 
+
 def read_air(sheet):
     # 逻辑如何处理，只有提运单号，处理那些字段呢？
     columns = None  # { '发票号': 1, '物料号': 3, ... }
@@ -264,8 +264,8 @@ def check(proforma_invoice, packing_list, air_waybill):
 
     # 开始写错误信息，如果有错误，则返回
     has_error = 0
-    has_error += write_row_errors(sheet1, reduce(lambda x, y: x + y['details'], invoices.values(), []), columns1)
-    has_error += write_row_errors(sheet2, reduce(lambda x, y: x + y['details'], packings.values(), []), columns2)
+    has_error += write_row_errors(sheet1, sum([x['details'] for x in invoices.values()], []), columns1)
+    has_error += write_row_errors(sheet2, sum([x['details'] for x in packings.values()], []), columns2)
     if air_waybill:
         has_error += write_row_errors(sheet3, airs, columns3)
     if has_error:
