@@ -9,7 +9,8 @@ __date__ = '2022/08/11 13:30'
 import os
 import logging
 
-import Taiflex as test
+import Taiflex
+import Concord
 # region 日志模块配置
 LOG_FILE= '校对日志.log'
 LOG_FMT = logging.Formatter('%(asctime)s - %(funcName)s - %(lineno)s - %(levelname)s - %(message)s')
@@ -38,7 +39,7 @@ logger.info('当前目录：%s', ROOT_PWD)
 
 # def check(proforma_invoice, packing_list, air_warbill):
 #     logging.info('%s\n%s\n%s', proforma_invoice, packing_list, air_warbill)
-
+'''
 def main():
     for item in os.listdir(ROOT_PWD):
         root_dir = os.path.join(ROOT_PWD, item)
@@ -61,6 +62,12 @@ def main():
                     proforma_invoice = os.path.join(target_dir, file_name)
             test.check(proforma_invoice, packing_list, air_warbill)
             break
+'''
+def main():
+    dir1 = os.path.join(ROOT_PWD, 'Concord', '识别结果')
+    Concord.check(os.path.join(dir1, 'Concord_ProformaInvoice.xlsx'), os.path.join(dir1, 'Concord_PackingList.xlsx'), None)
+    dir2 = os.path.join(ROOT_PWD, 'Taiflex', '识别结果')
+    Taiflex.check(os.path.join(dir2, 'Taiflex_ProformaInvoice.xlsx'), os.path.join(dir2, 'Taiflex_PackingList.xlsx'), os.path.join(dir2, 'Taiflex_AirWarbill.xlsx'))
 
 
 if __name__ == '__main__':

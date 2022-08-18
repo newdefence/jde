@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from openpyxl import load_workbook
 
+from read_sheet import check_result_column
 
 '''
 台虹：（需要多识别一个出售合同）taiflex
@@ -77,6 +78,7 @@ def read_invoice(sheet):
                 # 每一个发票号明细总数量全部相等，并等于该发票号所有数量合计
         else:  # 首行表头根据中文提取字段
             columns = dict((cell.value, cell.column - 1) for cell in row if cell.value)
+    check_result_column(sheet, columns)
     all_invoices = invoices.values()
     for invoice in all_invoices:
         sum1, details = invoice['sum'], invoice['details']
@@ -127,6 +129,7 @@ def read_packing(sheet):
             pkg['details'].append(detail)
         else:  # 第二行根据中文提取字段
             columns = dict((cell.value, cell.column - 1) for cell in row if cell.value)
+    check_result_column(sheet, columns)
     # 每一个发票号明细总数量，总净重，总毛重全部相等，总件数全部相同，并等于该发票号所有数量合计
     all_pkgs, all_sum = packings.values(), {'总毛重': 0, '总净重': 0}
     for invoice in all_pkgs:
@@ -175,6 +178,7 @@ def read_air(sheet):
             details.append(detail)
         else:  # 第二行根据中文提取字段
             columns = dict((cell.value, cell.column - 1) for cell in row if cell.value)
+    check_result_column(sheet, columns)
     all_sum = {
         '托盘数': sum(d['托盘数'] for d in details),
         '总毛重': sum(d['总毛重'] for d in details),
