@@ -5,6 +5,8 @@ __date__ = '2022/08/18 10:53'
 import logging
 from decimal import Decimal
 
+from openpyxl.utils import get_column_letter
+from ordered_set import OrderedSet
 
 logger = logging.getLogger()
 
@@ -39,7 +41,7 @@ def read_sheet12(sheet, fields1, fields2, sum_callback=None):
                 sum_callback(row, columns)
             else:
                 # 只处理所需的字段，由于涉及到空单元格的问题，因此需要逐个字段处理，如果为空则按0处理
-                detail = {'row': row, 'errors': set()}
+                detail = {'row': row, 'errors': OrderedSet()}
                 # for key in fields1:
                 #     cell = row[columns[key]]
                 #     if cell.value:
@@ -88,7 +90,7 @@ def read_sheet3(sheet, fields1, fields2):
     details, columns = [], None
     for row in sheet.iter_rows():
         if columns:  # 首行表头忽略
-            detail = {'row': row, 'errors': set()}
+            detail = {'row': row, 'errors': OrderedSet()}
             # for key in fields1:
             #     cell = row[columns[key]]
             #     if cell.value:
@@ -107,13 +109,15 @@ def write_row_errors(sheet, details, columns):
     col1, col2 = columns['可否入账'] + 1, columns['异常信息'] + 1
     has_error = False
     for d in details:
-        errors, warnings = d['errors'], d.get('warnings')
+        row, errors, warnings = d['row'][0].row, d['errors'], d.get('warnings')
         if errors:
             has_error = True
         if warnings:
             errors = errors + warnings
         if errors:
-            sheet.cell(d['row'][0].row, col2, '，'.join(errors))
+            sheet['%s%s' % (get_column_letter(col1), row)] = None
+            sheet.cell(row, col2, '，'.join(errors))
         else:
-            sheet.cell(d['row'][0].row, col1, '可入账')
+            sheet.cell(row, col1, '可入账')
+            sheet['%s%s' % (get_column_letter(col2), row)] = None
     return has_error

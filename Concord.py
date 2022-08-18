@@ -2,8 +2,8 @@
 __author__ = 'newdefence@163.com'
 __date__ = '2022/08/16 16:33' 
 
-import logging
 from decimal import Decimal
+import logging
 import re
 
 from openpyxl import load_workbook
@@ -26,10 +26,15 @@ from read_sheet import read_sheet12, write_row_errors, check_result_column
 
 
 logger = logging.getLogger()
-reKG = re.compile(r'\(([\d,\.]+)\s+KG\)') # (8.760 KG), 10.211LB (1.234 KG)
-reEA = re.compile(r'([\d,\.]+)\s+EA') # 60,000  EA
+reKG = re.compile(r'\(([\d,.]+)\s+KG\)') # (8.760 KG), 10.211LB (1.234 KG)
+reEA = re.compile(r'([\d,.]+)\s+EA') # 60,000  EA
 reOF = re.compile(r'\d+\s+of\s+(\d+)') # 01 of 02
 re00 = re.compile(r'^0+') # 箱单发票号前置的00需要去掉
+
+
+def Decimal2(rs):
+    return Decimal(rs[0].replace(',', ''))
+
 
 def read_invoice(sheet):
     """文件自查"""
@@ -46,22 +51,19 @@ def read_invoice(sheet):
         sum1, details = invoice['sum'], invoice['details']
         total_qty, total_invoice_value, total_gross_weight, total_net_weight, total_pkgs = \
             sum1['总数量'], sum1['总合计'], sum1['总毛重'], sum1['总净重'], sum1['总件数']
-        if total_qty != sum(r['数量'] for r in details):
-            tuple(d['errors'].add('总数量错误') for d in details)
-        if not all(r['总数量'] == total_qty for r in details):
-            tuple(d['errors'].add('总数量错误') for d in details)
-        tuple(d['errors'].add('合计错误') for d in details if (d['合计'] != d['数量'] * d['单价']))
-        if total_invoice_value != sum(r['合计'] for r in details):
-            tuple(d['errors'].add('总合计错误') for d in details)
-        if not all(r['总合计'] == total_invoice_value for r in details):
-            tuple(d['errors'].add('总合计错误') for d in details)
+        total_qty1 = sum(r['数量'] for r in details)
+        if total_qty != total_qty1:
+            tuple(d['errors'].add('SUM(数量): %s %s' % (total_qty, total_qty1)) for d in details)
+        tuple(d['errors'].add('总数量: %s %s' % (d['总数量'], total_qty)) for d in details if (d['总数量'] != total_qty))
+        tuple(d['errors'].add('合计: %s %s' % (d['合计'], d['数量'] * d['单价'])) for d in details if (d['合计'] != d['数量'] * d['单价']))
+        total_invoice_value1 = sum(r['合计'] for r in details)
+        if total_invoice_value != total_invoice_value1:
+            tuple(d['errors'].add('SUM(合计): %s %s' % (total_invoice_value, total_invoice_value1)) for d in details)
+        tuple(d['errors'].add('总合计: %s' % total_invoice_value) for d in details if (d['总合计'] != total_invoice_value))
         # 毛重没法比对，只能和自己比对
-        if not all(r['总毛重'] == total_gross_weight for r in details):
-            tuple(d['errors'].add('总毛重错误') for d in details)
-        if not all(r['总净重'] == total_net_weight for r in details):
-            tuple(d['errors'].add('总净重错误') for d in details)
-        if not all(r['总件数'] == total_pkgs for r in details):
-            tuple(d['errors'].add('总件数错误') for d in details)
+        tuple(d['errors'].add('总毛重: %s' % total_gross_weight) for d in details if (d['总毛重'] != total_gross_weight))
+        tuple(d['errors'].add('总净重: %s' % total_net_weight) for d in details if (d['总净重'] != total_net_weight))
+        tuple(d['errors'].add('总件数: %s' % total_pkgs) for d in details if (d['总件数'] != total_pkgs))
     # NOTE: 没有汇总核对需求
     all_sum ={
         '总数量': sum(v['sum']['总数量'] for v in all_invoices),
@@ -89,19 +91,18 @@ def read_packing(sheet):
                 d['毛重'] = 0
             else:
                 eraser.add(d['总件数'])
-            d['数量'] = Decimal(reEA.findall(d['数量'])[0].replace(',', '')) # '60,000 EA' -> 60000
-            d['总数量'] = Decimal(reEA.findall(d['总数量'])[0].replace(',', '')) # '60,000 EA' -> 60000
+            d['数量'] = Decimal2(reEA.findall(d['数量'])) # '60,000 EA' -> 60000
+            d['总数量'] = Decimal2(reEA.findall(d['总数量'])) # '60,000 EA' -> 60000
             # 正常情况下毛重净重需要处理千位分隔符问题；此处处理一下以防万一
-            d['净重'] = Decimal(reKG.findall(d['净重'])[0].replace(',', '')) if d['净重'] else Decimal(0) # '(5.710 KG)' -> 5.710
-            d['毛重'] = Decimal(reKG.findall(d['毛重'])[0].replace(',', '')) if d['毛重'] else Decimal(0)
-            d['总净重'] = Decimal(reKG.findall(d['总净重'])[0].replace(',', '')) if d['净重'] else Decimal(0) # '8.952 LB (4.061 KG)' -> 4.061
-            d['总毛重'] = Decimal(reKG.findall(d['总毛重'])[0].replace(',', '')) if d['毛重'] else Decimal(0)
-            d['_总件数'] = d['总件数']
+            d['净重'] = Decimal2(reKG.findall(d['净重'])) if d['净重'] else 0 # '(5.710 KG)' -> 5.710
+            d['毛重'] = Decimal2(reKG.findall(d['毛重'])) if d['毛重'] else 0
+            d['总净重'] = Decimal2(reKG.findall(d['总净重'])) if d['总净重'] else 0 # '8.952 LB (4.061 KG)' -> 4.061
+            d['总毛重'] = Decimal2(reKG.findall(d['总毛重'])) if d['总毛重'] else 0
             # d['_总托盘数'] = d['总托盘数']
-            d['总件数'] = Decimal(reOF.findall(d['总件数'])[0])
+            d['_总件数'] = Decimal(reOF.findall(d['总件数'])[0])
 
         total_qty, total_net_weight, total_gross_weight, total_pkgs = \
-            sum1['总数量'], sum1['总净重'], sum1['总毛重'], sum1['总件数']
+            sum1['总数量'], sum1['总净重'], sum1['总毛重'], sum1['_总件数']
         # all_sum['总毛重'] += total_gross_weight
         # all_sum['总净重'] += total_net_weight
         # 总托盘数，总箱数，总件数 不累加
@@ -109,26 +110,22 @@ def read_packing(sheet):
         # all_sum['总箱数'] = sum1['总箱数']
         # all_sum['总件数'] += sum1['总件数']
         if total_qty != sum(r['数量'] for r in details):
-            tuple(d['errors'].add('总数量错误') for d in details)
-        if not all(r['总数量'] == total_qty for r in details):
-            tuple(d['errors'].add('总数量错误') for d in details)
+            tuple(d['errors'].add('SUM(总数量): %s' % total_qty) for d in details)
+        tuple(d['errors'].add('总数量: %s' % total_qty) for d in details if (d['总数量'] != total_qty))
         if total_net_weight != sum(r['净重'] for r in details):
-            tuple(d['errors'].add('总净重错误') for d in details)
-        if not all(r['总净重'] == total_net_weight for r in details):
-            tuple(d['errors'].add('总净重错误') for d in details)
+            tuple(d['errors'].add('SUM(总净重): %s' % total_net_weight) for d in details)
+        tuple(d['errors'].add('总净重: %s %s' % (d['总净重'], total_net_weight)) for d in details if (d['总净重'] != total_net_weight))
         if total_gross_weight != sum(r['毛重'] for r in details):
-            tuple(d['errors'].add('总毛重错误') for d in details)
-        if not all(r['总毛重'] == total_gross_weight for r in details):
-            tuple(d['errors'].add('总毛重错误') for d in details)
-        if not all(r['总件数'] == total_pkgs for r in details):
-            tuple(d['errors'].add('总件数错误') for d in details)
+            tuple(d['errors'].add('SUM(总毛重): %s' % total_gross_weight) for d in details)
+        tuple(d['errors'].add('总毛重: %s %s' % (d['总毛重'], total_gross_weight)) for d in details if (d['总毛重'] != total_gross_weight))
+        tuple(d['errors'].add('总件数: %s' % total_pkgs) for d in details if (d['_总件数'] != total_pkgs))
     logger.info('箱单文件核对完成')
     all_sum = {
         '总数量': sum(v['sum']['总数量'] for v in all_pkgs),
         # '总合计': sum(v['sum']['总合计'] for v in all_pkgs),
         '总毛重': sum(v['sum']['总毛重'] for v in all_pkgs),
         '总净重': sum(v['sum']['总净重'] for v in all_pkgs),
-        '总件数': sum(v['sum']['总件数'] for v in all_pkgs),
+        # '总件数': sum(v['sum']['总件数'] for v in all_pkgs),
     }
     return columns, packings, all_sum
 
@@ -154,12 +151,13 @@ def check(proforma_invoice, packing_list, air_waybill):
             v1, v2 = invoices[key], packings[re00.sub('', key)]
             # NOTE: 只核对总数量，总净重（发票文件无该信息），总毛重，总件数不核对
             if v1['sum']['总数量'] == v2['sum']['总数量']:
-                logger.info('发票跟箱单：%s %s总数量相同', key,
+                logger.info('发票跟箱单: %s %s总数量相同', key,
                             '相同发票号单个料号' if len(v1['details']) > 1 else '单个发票号')
             else:
                 logger.warning('发票跟箱单：%s 总数量错误', key)
-                tuple(d['errors'].add('发票跟提单总数量错误') for d in v1['details'])
-                tuple(d['errors'].add('发票跟提单总数量错误') for d in v2['details'])
+                msg = '发票跟提单总数量: %s %s' % (v1['sum']['总数量'], v2['sum']['总数量'])
+                tuple(d['errors'].add(msg) for d in v1['details'])
+                tuple(d['errors'].add(msg) for d in v2['details'])
             # 校验箱单总毛重大于总净重
             if all(d['总毛重'] > d['总净重'] for d in v2['details']):
                 logger.info('发票跟箱单：%s 总毛重大于总净重', key)
@@ -167,7 +165,7 @@ def check(proforma_invoice, packing_list, air_waybill):
                 for d in v2['details']:
                     if d['总毛重'] <= d['总净重']:
                         logger.warning('发票跟箱单：%s 总毛重不大于总净重', key)
-                        d['errors'].add('总毛重不大于总净重')
+                        d['errors'].add('总毛重 总净重: %s %s' % (d['总毛重'], d['总净重']))
     else:
         def write_diff_error(host, keys, msg):
             if keys:

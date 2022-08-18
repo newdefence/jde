@@ -66,8 +66,8 @@ def main():
 def main():
     dir1 = os.path.join(ROOT_PWD, 'Concord', '识别结果')
     Concord.check(os.path.join(dir1, 'Concord_ProformaInvoice.xlsx'), os.path.join(dir1, 'Concord_PackingList.xlsx'), None)
-    dir2 = os.path.join(ROOT_PWD, 'Taiflex', '识别结果')
-    Taiflex.check(os.path.join(dir2, 'Taiflex_ProformaInvoice.xlsx'), os.path.join(dir2, 'Taiflex_PackingList.xlsx'), os.path.join(dir2, 'Taiflex_AirWarbill.xlsx'))
+    # dir2 = os.path.join(ROOT_PWD, 'Taiflex', '识别结果')
+    # Taiflex.check(os.path.join(dir2, 'Taiflex_ProformaInvoice.xlsx'), os.path.join(dir2, 'Taiflex_PackingList.xlsx'), os.path.join(dir2, 'Taiflex_AirWarbill.xlsx'))
 
 
 if __name__ == '__main__':
