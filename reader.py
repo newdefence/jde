@@ -5,7 +5,6 @@ __date__ = '2022/08/18 10:53'
 import logging
 from decimal import Decimal
 
-from openpyxl.utils import get_column_letter
 from ordered_set import OrderedSet
 
 logger = logging.getLogger()
@@ -98,7 +97,7 @@ def read_sheet3(sheet, fields1, fields2):
             #         detail[key] = cell.value
             #     else:
             #         detail['errors'].add('%s为空' % key)
-            detail.update((key, row[columns[key]]) for key in fields1)
+            detail.update((key, row[columns[key]].value) for key in fields1)
             detail.update((key, value(row[columns[key]])) for key in fields2)
             details.append(detail)
         else:  # 第二行根据中文提取字段
@@ -106,20 +105,3 @@ def read_sheet3(sheet, fields1, fields2):
     check_result_column(sheet, columns)
     return details, columns
 
-
-def write_row_errors(sheet, details, columns):
-    col1, col2 = columns['可否入账'] + 1, columns['异常信息'] + 1
-    has_error = False
-    for d in details:
-        row, errors, warnings = d['row'][0].row, d['errors'], d.get('warnings')
-        if errors:
-            has_error = True
-        if warnings:
-            errors = errors + warnings
-        if errors:
-            sheet['%s%s' % (get_column_letter(col1), row)] = None
-            sheet.cell(row, col2, '，'.join(errors))
-        else:
-            sheet.cell(row, col1, '可入账')
-            sheet['%s%s' % (get_column_letter(col2), row)] = None
-    return has_error

@@ -8,7 +8,8 @@ import re
 
 from openpyxl import load_workbook
 
-from read_sheet import read_sheet12, write_row_errors
+import checker
+import reader
 
 '''
 立寰：concord
@@ -43,26 +44,16 @@ def read_invoice(sheet):
     # { 'invoice_no': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
 
     # NOTE: 立寰发票文件没有汇总行
-    invoices, columns = read_sheet12(sheet, ('发票号', 'po号', '物料号'),
+    invoices, columns = reader.read_sheet12(sheet, ('发票号', 'po号', '物料号'),
                                     ('数量', '单价', '合计', '总数量', '总净重', '总合计', '总件数', '总毛重'))
     all_invoices = invoices.values()
     for invoice in all_invoices:
-        sum1, details = invoice['sum'], invoice['details']
-        total_qty, total_invoice_value, total_gross_weight, total_net_weight, total_pkgs = \
-            sum1['总数量'], sum1['总合计'], sum1['总毛重'], sum1['总净重'], sum1['总件数']
-        total_qty1 = sum(r['数量'] for r in details)
-        if total_qty != total_qty1:
-            tuple(d['errors'].add('SUM(数量): %s %s' % (total_qty, total_qty1)) for d in details)
-        tuple(d['errors'].add('总数量: %s %s' % (d['总数量'], total_qty)) for d in details if (d['总数量'] != total_qty))
-        tuple(d['errors'].add('合计: %s %s' % (d['合计'], d['数量'] * d['单价'])) for d in details if (d['合计'] != d['数量'] * d['单价']))
-        total_invoice_value1 = sum(r['合计'] for r in details)
-        if total_invoice_value != total_invoice_value1:
-            tuple(d['errors'].add('SUM(合计): %s %s' % (total_invoice_value, total_invoice_value1)) for d in details)
-        tuple(d['errors'].add('总合计: %s' % total_invoice_value) for d in details if (d['总合计'] != total_invoice_value))
+        checker.check_qty12(invoice)
+        checker.check_invoice_value1(invoice)
         # 毛重没法比对，只能和自己比对
-        tuple(d['errors'].add('总毛重: %s' % total_gross_weight) for d in details if (d['总毛重'] != total_gross_weight))
-        tuple(d['errors'].add('总净重: %s' % total_net_weight) for d in details if (d['总净重'] != total_net_weight))
-        tuple(d['errors'].add('总件数: %s' % total_pkgs) for d in details if (d['总件数'] != total_pkgs))
+        checker.check_gross_weight1(invoice)
+        checker.check_net_weight1(invoice)
+        checker.check_piece12(invoice)
     # NOTE: 没有汇总核对需求
     all_sum ={
         '总数量': sum(v['sum']['总数量'] for v in all_invoices),
@@ -76,7 +67,7 @@ def read_invoice(sheet):
 
 
 def read_packing(sheet):
-    packings, columns = read_sheet12(sheet, ('发票号', 'po号', '物料号', '数量', '净重', '毛重', '总数量', '总净重', '总毛重', '总件数', '总托盘数'), ('总箱数',))
+    packings, columns = reader.read_sheet12(sheet, ('发票号', 'po号', '物料号', '数量', '净重', '毛重', '总数量', '总净重', '总毛重', '总件数', '总托盘数'), ('总箱数',))
     # 每一个发票号明细总数量，总净重，总毛重全部相等，总件数全部相同，并等于该发票号所有数量合计
     all_pkgs = packings.values()
     for invoice in all_pkgs:
@@ -85,6 +76,7 @@ def read_packing(sheet):
         eraser = set()
         for d in details:
             if d['总件数'] in eraser:
+                # TODO: 记录擦除，还是等待Excel修改？
                 d['净重'] = 0
                 d['毛重'] = 0
             else:
@@ -98,25 +90,13 @@ def read_packing(sheet):
             d['总毛重'] = Decimal2(reKG.findall(d['总毛重'])) if d['总毛重'] else 0
             # d['_总托盘数'] = d['总托盘数']
             d['_总件数'] = Decimal(reOF.findall(d['总件数'])[0])
-
-        total_qty, total_net_weight, total_gross_weight, total_pkgs = \
-            sum1['总数量'], sum1['总净重'], sum1['总毛重'], sum1['_总件数']
-        # all_sum['总毛重'] += total_gross_weight
-        # all_sum['总净重'] += total_net_weight
-        # 总托盘数，总箱数，总件数 不累加
-        # all_sum['总托盘数'] = sum1['总托盘数']
-        # all_sum['总箱数'] = sum1['总箱数']
-        # all_sum['总件数'] += sum1['总件数']
-        if total_qty != sum(r['数量'] for r in details):
-            tuple(d['errors'].add('SUM(总数量): %s' % total_qty) for d in details)
-        tuple(d['errors'].add('总数量: %s' % total_qty) for d in details if (d['总数量'] != total_qty))
-        if total_net_weight != sum(r['净重'] for r in details):
-            tuple(d['errors'].add('SUM(总净重): %s' % total_net_weight) for d in details)
-        tuple(d['errors'].add('总净重: %s %s' % (d['总净重'], total_net_weight)) for d in details if (d['总净重'] != total_net_weight))
-        if total_gross_weight != sum(r['毛重'] for r in details):
-            tuple(d['errors'].add('SUM(总毛重): %s' % total_gross_weight) for d in details)
-        tuple(d['errors'].add('总毛重: %s %s' % (d['总毛重'], total_gross_weight)) for d in details if (d['总毛重'] != total_gross_weight))
-        tuple(d['errors'].add('总件数: %s' % total_pkgs) for d in details if (d['_总件数'] != total_pkgs))
+        checker.check_qty12(invoice)
+        checker.check_net_weight2(invoice)
+        checker.check_gross_weight2(invoice)
+        # checker.check_piece12(invoice)
+        # 总件数需要特殊处理
+        total_pieces = invoice['sum']['_总件数']
+        tuple(d['errors'].add('总件数: %s %s' % (d['_总件数'], total_pieces)) for d in invoice['details'] if (d['_总件数'] != total_pieces))
     logger.info('箱单文件核对完成')
     all_sum = {
         '总数量': sum(v['sum']['总数量'] for v in all_pkgs),
@@ -137,54 +117,27 @@ def check(proforma_invoice, packing_list, air_waybill):
         logger.warning('无箱单文件')
         return
     file1, file2 = load_workbook(proforma_invoice), load_workbook(packing_list)
-    sheet1, sheet2 = (f.worksheets[0] for f in (file1, file2))
+    sheet1, sheet2 = file1.worksheets[0], file2.worksheets[0]
 
     columns1, invoices, all_sum1 = read_invoice(sheet1)
     columns2, packings, all_sum2 = read_packing(sheet2)
     # 发票 VS 箱单
-    keys1 = set(invoices.keys())
+    keys1 = set(invoices.keys()) # dict_keys(set-like object) -> set
     keys2 = set(('00' + k) for k in packings.keys())
     if keys1 == keys2:
         for key in keys1:
             v1, v2 = invoices[key], packings[re00.sub('', key)]
             # NOTE: 只核对总数量，总净重（发票文件无该信息），总毛重，总件数不核对
-            if v1['sum']['总数量'] == v2['sum']['总数量']:
-                logger.info('发票跟箱单: %s %s总数量相同', key,
-                            '相同发票号单个料号' if len(v1['details']) > 1 else '单个发票号')
-            else:
-                logger.warning('发票跟箱单：%s 总数量错误', key)
-                msg = '发票跟提单总数量: %s %s' % (v1['sum']['总数量'], v2['sum']['总数量'])
-                tuple(d['errors'].add(msg) for d in v1['details'])
-                tuple(d['errors'].add(msg) for d in v2['details'])
+            checker.check_1_2_qty(logger, key, v1, v2)
             # 校验箱单总毛重大于总净重
-            if all(d['总毛重'] > d['总净重'] for d in v2['details']):
-                logger.info('发票跟箱单：%s 总毛重大于总净重', key)
-            else:
-                for d in v2['details']:
-                    if d['总毛重'] <= d['总净重']:
-                        logger.warning('发票跟箱单：%s 总毛重不大于总净重', key)
-                        d['errors'].add('总毛重 总净重: %s %s' % (d['总毛重'], d['总净重']))
+            checker.check_2_net_gross_weight(logger, key, v2)
     else:
-        def write_diff_error(host, keys, msg):
-            if keys:
-                for key in keys:
-                    tuple(d['errors'].add(msg) for d in host[key]['details'])
-
-        logger.warning('发票跟箱单：发票数据核对不上')
-        write_diff_error(invoices, keys1 - keys2, '发票号不在箱单文件中')
-        write_diff_error(packings, keys2 - keys1, '发票号不在发票文件中')
+        checker.write_12_inovice_diff(logger, invoices, keys1 - keys2, '发票号不在箱单中')
+        checker.write_12_inovice_diff(logger, packings, (re00.sub('', key) for key in (keys2 - keys1)), '发票号不在发票中')
 
     logger.info('文件交互核对完成，开始序列化')
+    checker.write_errors(logger, (sheet1, invoices, columns1), (sheet2, packings, columns2))
 
-    # 开始写错误信息，如果有错误，则返回
-    has_error = 0
-    has_error += write_row_errors(sheet1, sum([x['details'] for x in invoices.values()], []), columns1)
-    has_error += write_row_errors(sheet2, sum([x['details'] for x in packings.values()], []), columns2)
-
-    if has_error:
-        logger.warning('文件校验完成，错误已标注')
-    else:
-        logger.info('文件校验完成，没有错误信息')
     file1.save(proforma_invoice)
     file2.save(packing_list)
 
