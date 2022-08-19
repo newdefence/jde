@@ -13,7 +13,7 @@ import Taiflex
 import Concord
 # region 日志模块配置
 LOG_FILE= '校对日志.log'
-LOG_FMT = logging.Formatter('%(asctime)s - %(funcName)s - %(lineno)s - %(levelname)s - %(message)s')
+LOG_FMT = logging.Formatter('%(asctime)s %(levelname)s %(filename)s[%(lineno)s] - %(message)s')
 # 日志配置 1
 # logging.basicConfig(filename = LOG_FILE, filemode = 'w', format = LOG_FMT, level = logging.INFO)
 # logger = logging.getLogger()
@@ -21,7 +21,7 @@ LOG_FMT = logging.Formatter('%(asctime)s - %(funcName)s - %(lineno)s - %(levelna
 # 日志配置 2
 logger = logging.getLogger()
 # 文件日志输出
-file_hander = logging.FileHandler(LOG_FILE)
+file_hander = logging.FileHandler(LOG_FILE, encoding='utf8')
 file_hander.setLevel(logging.WARN)
 file_hander.setFormatter(LOG_FMT)
 logger.addHandler(file_hander)
@@ -37,8 +37,12 @@ logger.addHandler(console_hander)
 ROOT_PWD = os.path.dirname(os.path.abspath(__file__))
 logger.info('当前目录：%s', ROOT_PWD)
 
-# def check(proforma_invoice, packing_list, air_warbill):
-#     logging.info('%s\n%s\n%s', proforma_invoice, packing_list, air_warbill)
+
+# ProformaInvoice 相关变量命名规则 sheet1, check1
+# PackingList 相关变量命名规则 var_name_2
+# AirWaybill 相关变量命名规则 var_name_3
+
+
 '''
 def main():
     for item in os.listdir(ROOT_PWD):
@@ -66,8 +70,8 @@ def main():
 def main():
     dir1 = os.path.join(ROOT_PWD, 'Concord', '识别结果')
     Concord.check(os.path.join(dir1, 'Concord_ProformaInvoice.xlsx'), os.path.join(dir1, 'Concord_PackingList.xlsx'), None)
-    # dir2 = os.path.join(ROOT_PWD, 'Taiflex', '识别结果')
-    # Taiflex.check(os.path.join(dir2, 'Taiflex_ProformaInvoice.xlsx'), os.path.join(dir2, 'Taiflex_PackingList.xlsx'), os.path.join(dir2, 'Taiflex_AirWarbill.xlsx'))
+    dir2 = os.path.join(ROOT_PWD, 'Taiflex', '识别结果')
+    Taiflex.check(os.path.join(dir2, 'Taiflex_ProformaInvoice.xlsx'), os.path.join(dir2, 'Taiflex_PackingList.xlsx'), os.path.join(dir2, 'Taiflex_AirWarbill.xlsx'))
 
 
 if __name__ == '__main__':
