@@ -8,7 +8,7 @@ import re
 
 from openpyxl import load_workbook
 
-from read_sheet import read_sheet12, write_row_errors, check_result_column
+from read_sheet import read_sheet12, write_row_errors
 
 '''
 立寰：concord
@@ -45,7 +45,6 @@ def read_invoice(sheet):
     # NOTE: 立寰发票文件没有汇总行
     invoices, columns = read_sheet12(sheet, ('发票号', 'po号', '物料号'),
                                     ('数量', '单价', '合计', '总数量', '总净重', '总合计', '总件数', '总毛重'))
-    check_result_column(sheet, columns)
     all_invoices = invoices.values()
     for invoice in all_invoices:
         sum1, details = invoice['sum'], invoice['details']
@@ -78,7 +77,6 @@ def read_invoice(sheet):
 
 def read_packing(sheet):
     packings, columns = read_sheet12(sheet, ('发票号', 'po号', '物料号', '数量', '净重', '毛重', '总数量', '总净重', '总毛重', '总件数', '总托盘数'), ('总箱数',))
-    check_result_column(sheet, columns)
     # 每一个发票号明细总数量，总净重，总毛重全部相等，总件数全部相同，并等于该发票号所有数量合计
     all_pkgs = packings.values()
     for invoice in all_pkgs:

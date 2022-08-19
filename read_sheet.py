@@ -57,6 +57,7 @@ def read_sheet12(sheet, fields1, fields2, sum_callback=None):
                 # 每一个发票号明细总数量全部相等，并等于该发票号所有数量合计
         else:  # 首行表头根据中文提取字段
             columns = dict((cell.value, cell.column - 1) for cell in row if cell.value)
+    check_result_column(sheet, columns)
     return invoices, columns
 
 
@@ -102,6 +103,7 @@ def read_sheet3(sheet, fields1, fields2):
             details.append(detail)
         else:  # 第二行根据中文提取字段
             columns = dict((cell.value, cell.column - 1) for cell in row if cell.value)
+    check_result_column(sheet, columns)
     return details, columns
 
 
