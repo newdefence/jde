@@ -6,6 +6,25 @@ from openpyxl.utils import get_column_letter
 # def check_sum1_sum2(details, key, sum1):
 #     sum2 = sum(d[key] for d in details)
 
+
+def check_all_sum(sum_row, all_invoices, keys):
+    """
+        all_qty = sum(v['sum']['总数量'] for v in all_invoices)
+        all_invoice_value = sum(v['sum']['总合计'] for v in all_invoices)
+        all_gross_weight = sum(v['sum']['总毛重'] for v in all_invoices)
+        if all_sum['总数量'] != all_qty:
+            all_sum['errors'].add('SUM(总数量): %s %s' % (all_sum['总数量'], all_qty))
+        if all_sum['总合计'] != all_invoice_value:
+            all_sum['errors'].add('SUM(总合计): %s %s' % (all_sum['总合计'], all_invoice_value))
+        if all_sum['总合计'] != all_gross_weight:
+            all_sum['errors'].add('SUM(总合计): %s %s' % (all_sum['总合计'], all_gross_weight))
+    """
+    for key in keys:
+        sum1 = sum(v['sum'][key] for v in all_invoices)
+        if sum_row[key] != sum1:
+            sum_row['errors'].add('SUM(%s): %s %s' % (key, sum_row[key], sum1))
+
+
 def check_qty12(invoice):
     sum1, details = invoice['sum'], invoice['details']
     total_qty = sum1['总数量']
@@ -82,6 +101,7 @@ def check_2_net_gross_weight(logger, key, v2):
             logger.info('发票 VS 箱单：%s 总毛重 ＞ 总净重', key)
     return ok
 
+
 def write_12_inovice_diff(logger, host, keys, msg):
     # 发票号不在箱单/发票中
     if not keys:
@@ -107,6 +127,19 @@ def _write_errors_details(sheet, details, col1, col2):
             sheet['%s%s' % (get_column_letter(col2), row)] = None
     return has_error
 
+
+def check_errors_all_sum(logger, sheet1, sum_row, columns):
+    row_idx = sum_row['row'][0].row
+    if sum_row['errors']:
+        msg = '，'.join(sum_row['errors'])
+        logger.warning('汇总信息错误：%s' % msg)
+        sheet1['%s%s' % (get_column_letter(columns['可否入账'] + 1), row_idx)] = None
+        sheet1.cell(row_idx, columns['异常信息'] + 1, msg)
+        return True
+    logger.info('汇总信息正常')
+    sheet1.cell(row_idx, columns['可否入账'] + 1, '可入账')
+    sheet1['%s%s' % (get_column_letter(columns['异常信息'] + 1), row_idx)] = None
+    return False
 
 def write_errors(logger, file1, file2, file3=None):
     errors = 0

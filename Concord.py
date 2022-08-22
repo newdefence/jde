@@ -108,7 +108,6 @@ def read_packing(sheet):
     return columns, packings, all_sum
 
 
-
 def check(proforma_invoice, packing_list, air_waybill):
     if proforma_invoice is None:
         logger.warning('无发票文件')

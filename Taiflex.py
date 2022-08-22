@@ -57,15 +57,7 @@ def read_invoice(sheet):
         checker.check_gross_weight1(invoice)
         checker.check_net_weight1(invoice) # 毛重没法比对，只能和自己比对
         checker.check_piece12(invoice)
-    all_qty = sum(v['sum']['总数量'] for v in all_invoices)
-    all_invoice_value = sum(v['sum']['总合计'] for v in all_invoices)
-    all_gross_weight = sum(v['sum']['总毛重'] for v in all_invoices)
-    if all_sum['总数量'] != all_qty:
-        all_sum['errors'].add('SUM(总数量): %s %s' % (all_sum['总数量'], all_qty))
-    if all_sum['总合计'] != all_invoice_value:
-        all_sum['errors'].add('SUM(总合计): %s %s' % (all_sum['总合计'], all_invoice_value))
-    if all_sum['总合计'] != all_gross_weight:
-        all_sum['errors'].add('SUM(总合计): %s %s' % (all_sum['总合计'], all_gross_weight))
+    checker.check_all_sum(all_sum, all_invoices, ('总数量', '总合计', '总毛重'))
     # NOTE: 没有总件数和总净重的核对需求
     logger.info('发票文件核对完成')
     return columns, invoices, all_sum
@@ -73,7 +65,6 @@ def read_invoice(sheet):
 
 def read_packing(sheet):
     # 发票号，PO号，物料号，数量，单价，合计，总数量，总合计，总件数，总毛重，总净重
-    # { '发票号': 1, '物料号': 3, ... }
     # { 'invoice_no': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
     packings, columns = reader.read_sheet12(sheet, ('发票号', 'po号', '物料号'), ('数量', '净重', '毛重', '总数量', '总净重', '总毛重', '总件数', '总托盘数', '总箱数'))
     # 每一个发票号明细总数量，总净重，总毛重全部相等，总件数全部相同，并等于该发票号所有数量合计
@@ -82,7 +73,7 @@ def read_packing(sheet):
         sum1 = invoice['sum']
         all_sum['总毛重'] += sum1['总毛重']
         all_sum['总净重'] += sum1['总净重']
-        # 总托盘数，总箱数，总件数 不累加
+        # TODO CONFIRM: 总托盘数，总箱数，总件数 不累加 ?
         all_sum['总托盘数'] = sum1['总托盘数']
         all_sum['总箱数'] = sum1['总箱数']
         all_sum['总件数'] = sum1['总件数']
@@ -97,7 +88,6 @@ def read_packing(sheet):
 def read_air(sheet):
     # 逻辑如何处理，只有提运单号，处理那些字段呢？
     columns = None  # { '发票号': 1, '物料号': 3, ... }
-    # { 'invoice_no': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
     details, columns = reader.read_sheet3(sheet, ('主运单号', '分运单号'), ('托盘数', '总毛重', '总件数'))
     all_sum = {
         '托盘数': sum(d['托盘数'] for d in details),
@@ -156,6 +146,7 @@ def check(proforma_invoice, packing_list, air_waybill):
             write_air_errors('箱单总净重需小于提单总毛重')
     
     logger.info('文件交互核对完成，开始序列化')
+    checker.check_errors_all_sum(logger, sheet1, all_sum1, columns1)
     checker.write_errors(logger, (sheet1, invoices, columns1), (sheet2, packings, columns2),
         (sheet3, airs, columns3) if air_waybill else None)
 
