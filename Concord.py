@@ -27,10 +27,10 @@ import reader
 
 
 logger = logging.getLogger()
-reKG = re.compile(r'\(([\d,.]+)\s+KG\)') # (8.760 KG), 10.211LB (1.234 KG)
-reEA = re.compile(r'([\d,.]+)\s+EA') # 60,000  EA
-reOF = re.compile(r'\d+\s+of\s+(\d+)') # 01 of 02
-re00 = re.compile(r'^0+') # 箱单发票号前置的00需要去掉
+reKG = re.compile(r'\(([\d,.]+)\s+KG\)')  # (8.760 KG), 10.211LB (1.234 KG)
+reEA = re.compile(r'([\d,.]+)\s+EA')  # 60,000  EA
+reOF = re.compile(r'\d+\s+of\s+(\d+)')  # 01 of 02
+re00 = re.compile(r'^0+')  # 箱单发票号前置的00需要去掉
 
 
 def Decimal2(rs):

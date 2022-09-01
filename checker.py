@@ -22,7 +22,7 @@ def check_all_sum(sum_row, all_invoices, keys):
     for key in keys:
         sum1 = sum(v['sum'][key] for v in all_invoices)
         if sum_row[key] != sum1:
-            sum_row['errors'].add('SUM(%s): %s %s' % (key, sum_row[key], sum1))
+            sum_row['errors'].add('SUM(%s): %s != %s' % (key, sum_row[key], sum1))
 
 
 def check_qty12(invoice):
@@ -31,22 +31,27 @@ def check_qty12(invoice):
     total_qty1 = sum(d['数量'] for d in details)
     if total_qty != total_qty1:
         tuple(d['errors'].add('SUM(数量): %s %s' % (total_qty, total_qty1)) for d in details)
-    tuple(d['errors'].add('总数量: %s %s' % (d['总数量'], total_qty)) for d in details if (d['总数量'] != total_qty))
+    # 单个数量大于0，则SUM(数量) == 总数量，不再校验总数量是否大于0
+    tuple(d['errors'].add('数量: %s < 0' % (d['数量'], )) for d in details if (d['数量'] < 0))
+    tuple(d['errors'].add('总数量: %s != %s' % (d['总数量'], total_qty)) for d in details if (d['总数量'] != total_qty))
 
 
 def check_invoice_value1(invoice):
     sum1, details = invoice['sum'], invoice['details']
     total_invoice_value = sum1['总合计']
     total_invoice_value1 = sum(d['合计'] for d in details)
-    tuple(d['errors'].add('合计: %s %s' % (d['合计'], d['数量'] * d['单价'])) for d in details if (d['合计'] != d['数量'] * d['单价']))
+    # 单个数量和单价大于0，则不再检验合计，总合计是否大于0
+    tuple(d['errors'].add('单价: %s < 0' % (d['单价'],)) for d in details if (d['单价'] < 0))
+    tuple(d['errors'].add('合计: %s != %s' % (d['合计'], d['数量'] * d['单价'])) for d in details if (d['合计'] != d['数量'] * d['单价']))
     if total_invoice_value != total_invoice_value1:
-        tuple(d['errors'].add('SUM(总合计): %s %s' % (total_invoice_value, total_invoice_value1)) for d in details)
-    tuple(d['errors'].add('总合计: %s %s' % (d['总合计'], total_invoice_value)) for d in details if (d['总合计'] != total_invoice_value))
+        tuple(d['errors'].add('SUM(总合计): %s != %s' % (total_invoice_value, total_invoice_value1)) for d in details)
+    tuple(d['errors'].add('总合计: %s != %s' % (d['总合计'], total_invoice_value)) for d in details if (d['总合计'] != total_invoice_value))
 
 
 def check_gross_weight1(invoice):
     total_gross_weight = invoice['sum']['总毛重']
-    tuple(d['errors'].add('总毛重: %s %s' % (d['总毛重'], total_gross_weight)) for d in invoice['details'] if (d['总毛重'] != total_gross_weight))
+    tuple(d['errors'].add('总毛重: %s < 0' % (d['总毛重'],)) for d in invoice['details'] if (d['总毛重'] < 0))
+    tuple(d['errors'].add('总毛重: %s != %s' % (d['总毛重'], total_gross_weight)) for d in invoice['details'] if (d['总毛重'] != total_gross_weight))
 
 
 def check_gross_weight2(invoice):
@@ -55,12 +60,14 @@ def check_gross_weight2(invoice):
     total_gross_weight1 = sum(d['毛重'] for d in details)
     if total_gross_weight != total_gross_weight1:
         tuple(d['errors'].add('SUM(毛重): %s %s' % (total_gross_weight, total_gross_weight1)) for d in details)
-    tuple(d['errors'].add('总毛重: %s %s' % (d['总毛重'], total_gross_weight)) for d in details if (d['总毛重'] != total_gross_weight))
+    tuple(d['errors'].add('毛重: %s < 0' % (d['毛重'], )) for d in details if (d['毛重'] < 0))
+    tuple(d['errors'].add('总毛重: %s != %s' % (d['总毛重'], total_gross_weight)) for d in details if (d['总毛重'] != total_gross_weight))
 
 
 def check_net_weight1(invoice):
     total_net_weight = invoice['sum']['总净重']
-    tuple(d['errors'].add('总净重: %s %s' % (d['总净重'], total_net_weight)) for d in invoice['details'] if (d['总净重'] != total_net_weight))
+    tuple(d['errors'].add('总净重: %s < 0' % (d['总净重'], )) for d in invoice['details'] if (d['总净重'] < 0))
+    tuple(d['errors'].add('总净重: %s != %s' % (d['总净重'], total_net_weight)) for d in invoice['details'] if (d['总净重'] != total_net_weight))
 
 
 def check_net_weight2(invoice):
@@ -69,12 +76,22 @@ def check_net_weight2(invoice):
     total_net_weight1 = sum(d['净重'] for d in details)
     if total_net_weight != total_net_weight1:
         tuple(d['errors'].add('SUM(净重): %s %s' % (total_net_weight, total_net_weight1)) for d in details)
-    tuple(d['errors'].add('总净重: %s %s' % (d['总净重'], total_net_weight)) for d in details if (d['总净重'] != total_net_weight))
+    tuple(d['errors'].add('净重: %s < 0' % (d['净重'], )) for d in details if (d['总净重'] < 0))
+    tuple(d['errors'].add('总净重: %s != %s' % (d['总净重'], total_net_weight)) for d in details if (d['总净重'] != total_net_weight))
 
 
 def check_piece12(invoice): # 总件数
     piece = invoice['sum']['总件数']
-    tuple(d['errors'].add('总件数: %s %s' % (d['总件数'], piece)) for d in invoice['details'] if (d['总件数'] != piece))
+    tuple(d['errors'].add('总件数: %s < 0' % (d['总件数'], )) for d in invoice['details'] if (d['总件数'] < 0))
+    tuple(d['errors'].add('总件数: %s != %s' % (d['总件数'], piece)) for d in invoice['details'] if (d['总件数'] != piece))
+
+
+def gen_check_total(key):
+    def fn(invoice):
+        total1 = invoice['sum'][key]
+        tuple(d['errors'].add('%s: %s < 0' % (key, d[key],)) for d in invoice['details'] if (d[key] < 0))
+        tuple(d['errors'].add('%s: %s != %s' % (key, d[key], total1)) for d in invoice['details'] if (d[key] != total1))
+    return fn
 
 
 def check_1_2_qty(logger, key, v1, v2): # 发票文件发票号，箱单文件发票号
