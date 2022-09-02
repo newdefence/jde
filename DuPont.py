@@ -47,17 +47,16 @@ def Decimal2(reg, origin):
 
 def read_invoice(sheet):
     """文件自查"""
-    # 发票号，地址，原产国，PO号，物料号，数量，单价，合计，总数量，总合计，总件数，总毛重，总净重
-    # { '发票号': 1, '物料号': 3, ... }
-    # { 'invoice_no': { 'sum': { '总合计': 1, '总毛重': 2, ... }, 'details': [{ 'PO号': 'xxx', '物料号': '', ... }, ...] } }
-
-    # NOTE: 立寰发票文件没有汇总行
-    invoices, columns = reader.read_sheet12(sheet, ('发票号', 'po号', '物料号'),
+    invoices, columns = reader.read_sheet12(sheet, ('发票号', 'po号', '物料号', '空运校验点'),
                                     ('数量', '单价', '合计', '总数量', '总净重', '总毛重', '总合计', '总件数'))
     all_invoices = invoices.values()
     for invoice in all_invoices:
+        # 总数量为空
+        # 总净重为空
+        # 总毛重为空
+        # 总件数为空
+        checker.check_lt0(invoice, ('数量', '单价', '合计', '总合计'))
         checker.check_invoice_value1(invoice)
-        # 总数量，总净重，总毛重，总件数 均为空
     # NOTE: 没有汇总核对需求
     logger.info('发票文件核对完成')
     return columns, invoices, None
@@ -77,7 +76,10 @@ def read_packing(sheet):
             d['总毛重'] = Decimal2(reKG, d['总毛重'])
             d['总托盘数'] = Decimal2(rePLT, d['总托盘数'])  # '12PLT' -> 12
             d['总箱数'] = Decimal2(reKG, d['总箱数'])  # '425CTN' -> 425
-        # 没有总数量(只有单个数量)，没有毛重(只有总毛重)，没有总件数
+        # 毛重为空
+        # 总数量为空
+        # 总件数为空（使用总托盘数√|总箱数代替）
+        checker.check_lt0(invoice['details'], ('数量', '净重', '总净重', '总毛重', '总托盘数', '总箱数'))
         checker.check_net_weight2(invoice)
         checker.check_gross_weight1(invoice)
         check_总托盘数(invoice)
@@ -86,18 +88,21 @@ def read_packing(sheet):
     return columns, packings, None
 
 
-def check(proforma_invoice, packing_list, air_waybill):
-    if proforma_invoice is None:
-        logger.warning('无发票文件')
-        return
-    if packing_list is None:
-        logger.warning('无箱单文件')
-        return
+def check(proforma_invoice, packing_list, air_waybill, excel):
     file1, file2 = load_workbook(proforma_invoice), load_workbook(packing_list)
     sheet1, sheet2 = file1.worksheets[0], file2.worksheets[0]
+    file3, sheet3, airs = None, None, None
+    file4, sheet4, cpns = None, None, None
 
     columns1, invoices, _ = read_invoice(sheet1)
     columns2, packings, _ = read_packing(sheet2)
+    if air_waybill:
+        # TODO: 校验规则，以及样例数据
+        pass
+    if excel:
+        file4 = load_workbook(excel)
+        sheet4 = file4.worksheets[0]
+        cpns = reader.read_sheet4(sheet4, 'F')  # F列是发票号
     # 发票 VS 箱单
     keys1 = invoices.keys() # dict_keys(set-like object) -> set
     keys2 = packings.keys()
@@ -112,6 +117,12 @@ def check(proforma_invoice, packing_list, air_waybill):
     else:
         checker.write_12_inovice_diff(logger, invoices, keys1 - keys2, '发票号不在箱单中')
         checker.write_12_inovice_diff(logger, packings, keys2 - keys1, '发票号不在发票中')
+
+    # TODO 箱单 VS Excel校验
+    if excel:
+        dict4 = {}
+        for row in cpns:
+            pass
 
     logger.info('文件交互核对完成，开始序列化')
     checker.write_errors(logger, (sheet1, invoices, columns1), (sheet2, packings, columns2))

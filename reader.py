@@ -6,6 +6,8 @@ import logging
 from decimal import Decimal
 
 from ordered_set import OrderedSet
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
 
 logger = logging.getLogger()
 
@@ -18,14 +20,14 @@ def value(cell):
         return Decimal()
 
 
-def check_result_column(sheet, columns):
-    if '可否入账' in columns:
-        return
-    max_column = sheet.max_column
-    columns['可否入账'] = max_column + 1
-    columns['异常信息'] = max_column + 2
-    sheet.cell(1, max_column + 2, '可否入账')
-    sheet.cell(1, max_column + 3, '异常信息')
+# def check_result_column(sheet, columns):
+#     if '可否入账' in columns:
+#         return
+#     max_column = sheet.max_column
+#     columns['可否入账'] = max_column + 1
+#     columns['异常信息'] = max_column + 2
+#     sheet.cell(1, max_column + 2, '可否入账')
+#     sheet.cell(1, max_column + 3, '异常信息')
 
 
 def read_sheet12(sheet, fields1, fields2, sum_callback=None):
@@ -56,7 +58,7 @@ def read_sheet12(sheet, fields1, fields2, sum_callback=None):
                 # 每一个发票号明细总数量全部相等，并等于该发票号所有数量合计
         else:  # 首行表头根据中文提取字段
             columns = dict((cell.value, cell.column - 1) for cell in row if cell.value)
-    check_result_column(sheet, columns)
+    # check_result_column(sheet, columns)
     return invoices, columns
 
 
@@ -102,6 +104,18 @@ def read_sheet3(sheet, fields1, fields2):
             details.append(detail)
         else:  # 第二行根据中文提取字段
             columns = dict((cell.value, cell.column - 1) for cell in row if cell.value)
-    check_result_column(sheet, columns)
+    # check_result_column(sheet, columns)
     return details, columns
 
+def read_sheet4(sheet: Worksheet, letter1: str):
+    '''Excel文件读取结构，columns = {1: 'title1', 2: 'title2'}'''
+    invoices, columns = {}, None
+    for row in sheet.iter_rows():
+        if columns:  # 首行表头忽略
+            line = {'row': row, 'errors': OrderedSet()}
+            line.update((get_column_letter(c.column), c.value) for c in row)
+            invoice = invoices.setdefault(line[letter1], [])
+            invoice['details'].append(line)
+        else:  # 第二行根据中文提取字段
+            columns = dict((cell.column - 1, cell.value) for cell in row)
+    return invoices, columns

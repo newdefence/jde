@@ -2,10 +2,18 @@
 __author__ = 'newdefence@163.com'
 __date__ = '2022/08/19 10:25'
 
+from collections import OrderedDict
+
+from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 # def check_sum1_sum2(details, key, sum1):
 #     sum2 = sum(d[key] for d in details)
 
+def check_lt0(details, keys):
+    '''检验数据是否小于0'''
+    # tuple(d['errors'].add('数量: %s < 0' % (d['数量'], )) for d in details if (d['数量'] < 0))
+    for key in keys:
+        tuple(d['errors'].add('%s: %s < 0' % (key, d[key],)) for d in details if (d[key] < 0))
 
 def check_all_sum(sum_row, all_invoices, keys):
     """
@@ -176,3 +184,17 @@ def write_errors(logger, file1, file2, file3=None):
         logger.warning('文件校验完成，错误已标注')
     else:
         logger.info('文件校验完成，没有错误信息')
+
+def write_cpn_sum_sheet(wb: Workbook, packings: dict):
+    if 'sum' in wb:
+        del wb['sum']
+    # 不同的发票号中会有相同的物料号，需要把忽略不同的发票号对物料号做汇总
+    cpn = OrderedDict()
+    for pn in packings.values():
+        for row in pn['details']:
+            cpn.setdefault(row['物料号'], []).append(row)
+    sheet = wb.create_sheet('sum', 1)
+    sheet.append(('物料号', '总数量', '总净重', '总毛重'))
+    for no, row in cpn.items():
+        sheet.append((no, sum(d['总数量'] for d in row), sum(d['总净重'] for d in row), sum(d['总毛重'] for d in row)))
+        

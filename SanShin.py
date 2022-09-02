@@ -81,6 +81,8 @@ def check(proforma_invoice, packing_list, air_waybill):
 
     columns1, invoices, _ = read_invoice(sheet1)
     columns2, packings, _ = read_packing(sheet2)
+    # 汇总箱单SUM
+    checker.write_cpn_sum_sheet(file2, packings)
     # 发票 VS 箱单
     keys1 = invoices.keys() # dict_keys(set-like object) -> set
     keys2 = packings.keys()
